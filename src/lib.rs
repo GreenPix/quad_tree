@@ -7,53 +7,53 @@ pub struct Position {
 }
 
 #[derive(Clone,Debug)]
-pub struct QuadTree {
-    root: QuadTreeNode,
+pub struct QuadTree<T> {
+    root: QuadTreeNode<T>,
 }
 
-impl QuadTree {
-    pub fn new(left: f32, right: f32, top: f32, bot: f32) -> QuadTree {
+impl<T> QuadTree<T> {
+    pub fn new(left: f32, right: f32, top: f32, bot: f32) -> QuadTree<T> {
         QuadTree {
             root: QuadTreeNode::new(left, right, top, bot),
         }
     }
 
-    pub fn add(&mut self, node: Position) {
-        self.root.add(node);
+    pub fn add(&mut self, pos: Position, data: T) {
+        self.root.add(pos, data);
     }
 
     pub fn visit<F>(&mut self, f: &mut F)
-    where F: FnMut(f32, f32, f32, f32, Option<&mut Position>) -> bool {
+    where F: FnMut(f32, f32, f32, f32, Option<(Position, &mut T)>) -> bool {
         self.root.visit(f);
     }
 }
 
 #[derive(Clone,Debug)]
-struct QuadTreeNode {
+struct QuadTreeNode<T> {
     left: f32,
     right: f32,
     top: f32,
     bot: f32,
-    kind: QuadTreeNodeKind,
+    kind: QuadTreeNodeKind<T>,
 }
 
 #[derive(Clone,Debug)]
-enum QuadTreeNodeKind {
+enum QuadTreeNodeKind<T> {
     Empty,
-    Leaf(Position),
-    Interior(Box<Subtrees>)
+    Leaf((Position,T)),
+    Interior(Box<Subtrees<T>>)
 }
 
 #[derive(Clone,Debug)]
-struct Subtrees {
-    top_left:  QuadTreeNode,
-    top_right: QuadTreeNode,
-    bot_left:  QuadTreeNode,
-    bot_right: QuadTreeNode,
+struct Subtrees<T> {
+    top_left:  QuadTreeNode<T>,
+    top_right: QuadTreeNode<T>,
+    bot_left:  QuadTreeNode<T>,
+    bot_right: QuadTreeNode<T>,
 }
 
-impl Subtrees {
-    fn new(left: f32, right: f32, top: f32, bot: f32) -> Subtrees {
+impl<T> Subtrees<T> {
+    fn new(left: f32, right: f32, top: f32, bot: f32) -> Subtrees<T> {
         debug_assert!(left < right);
         debug_assert!(bot < top);
         let mid_x = (right + left) / 2.0;
@@ -66,19 +66,19 @@ impl Subtrees {
         }
     }
 
-    fn add(&mut self, node: Position) {
-        let left = node.x < (self.top_right.right + self.bot_left.left) / 2.0;
-        let bot  = node.y < (self.top_right.top   + self.bot_left.bot)  / 2.0;
+    fn add(&mut self, pos: Position, data: T) {
+        let left = pos.x < (self.top_right.right + self.bot_left.left) / 2.0;
+        let bot  = pos.y < (self.top_right.top   + self.bot_left.bot)  / 2.0;
         match (bot, left) {
-            (true , true ) => self.bot_left.add(node),
-            (true , false) => self.bot_right.add(node),
-            (false, true ) => self.top_left.add(node),
-            (false, false) => self.top_right.add(node),
+            (true , true ) => self.bot_left.add(pos, data),
+            (true , false) => self.bot_right.add(pos, data),
+            (false, true ) => self.top_left.add(pos, data),
+            (false, false) => self.top_right.add(pos, data),
         }
     }
 
     fn visit<F>(&mut self, f: &mut F)
-    where F: FnMut(f32, f32, f32, f32, Option<&mut Position>) -> bool {
+    where F: FnMut(f32, f32, f32, f32, Option<(Position, &mut T)>) -> bool {
         self.top_left.visit(f);
         self.top_right.visit(f);
         self.bot_left.visit(f);
@@ -86,8 +86,8 @@ impl Subtrees {
     }
 }
 
-impl QuadTreeNode {
-    fn new(left: f32, right: f32, top: f32, bot: f32) -> QuadTreeNode {
+impl<T> QuadTreeNode<T> {
+    fn new(left: f32, right: f32, top: f32, bot: f32) -> QuadTreeNode<T> {
         QuadTreeNode {
             left: left,
             right: right,
@@ -97,37 +97,37 @@ impl QuadTreeNode {
         }
     }
 
-    fn add(&mut self, node: Position) {
-        if (node.x < self.left || node.x > self.right ||
-            node.y < self.bot  || node.y > self.top) {
+    fn add(&mut self, pos: Position, data: T) {
+        if pos.x < self.left || pos.x > self.right ||
+           pos.y < self.bot  || pos.y > self.top {
             panic!("Trying to add point to wrong subtree");
         }
         match self.kind {
             QuadTreeNodeKind::Empty => {
-                self.kind = QuadTreeNodeKind::Leaf(node);
+                self.kind = QuadTreeNodeKind::Leaf((pos, data));
             }
             QuadTreeNodeKind::Leaf(_) => {
                 let mut subtree = Box::new(Subtrees::new(self.left, self.right, self.top, self.bot));
-                subtree.add(node);
-                let other_node = match mem::replace(&mut self.kind, QuadTreeNodeKind::Empty) {
-                    QuadTreeNodeKind::Leaf(other_node) => other_node,
+                subtree.add(pos, data);
+                let (other_pos, other_data) = match mem::replace(&mut self.kind, QuadTreeNodeKind::Empty) {
+                    QuadTreeNodeKind::Leaf(o) => o,
                     _ => unreachable!(),
                 };
-                subtree.add(other_node);
+                subtree.add(other_pos, other_data);
                 self.kind = QuadTreeNodeKind::Interior(subtree);
             }
-            QuadTreeNodeKind::Interior(ref mut nodes) => {
-                nodes.add(node);
+            QuadTreeNodeKind::Interior(ref mut poss) => {
+                poss.add(pos, data);
             }
         }
     }
 
     fn visit<F>(&mut self, f: &mut F)
-    where F: FnMut(f32, f32, f32, f32, Option<&mut Position>) -> bool {
+    where F: FnMut(f32, f32, f32, f32, Option<(Position, &mut T)>) -> bool {
         match self.kind {
             QuadTreeNodeKind::Empty => {}
-            QuadTreeNodeKind::Leaf(ref mut pos) => {
-                f(self.left, self.bot, self.right, self.top, Some(pos));
+            QuadTreeNodeKind::Leaf((pos, ref mut data)) => {
+                f(self.left, self.bot, self.right, self.top, Some((pos, data)));
             }
             QuadTreeNodeKind::Interior(ref mut subtrees) => {
                 if f(self.left, self.bot, self.right, self.top, None) {
