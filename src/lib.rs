@@ -1,10 +1,10 @@
+extern crate nalgebra;
+
 use std::mem;
 
-#[derive(Clone,Copy,Debug)]
-pub struct Position {
-    pub x: f32,
-    pub y: f32,
-}
+use nalgebra::Point2;
+
+pub type Position = Point2<f32>;
 
 #[derive(Clone,Debug)]
 pub struct QuadTree<T> {
