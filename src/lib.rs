@@ -45,6 +45,11 @@ impl Rectangle {
     pub fn is_inside(&self, pos: Position) -> bool {
         pos.x >= self.left && pos.x <= self.right && pos.y >= self.bot && pos.y <= self.top
     }
+
+    pub fn contains(&self, other: Rectangle) -> bool {
+        other.left >= self.left && other.right <= self.right
+            && other.bot >= self.bot && other.top <= self.top
+    }
 }
 
 #[derive(Clone,Debug)]
@@ -66,6 +71,10 @@ impl<T> QuadTree<T> {
     pub fn visit<F>(&self, f: &mut F)
     where F: FnMut(&Rectangle, Option<(Position, &T)>) -> bool {
         self.root.visit(f);
+    }
+
+    pub fn area(&self) -> Rectangle {
+        self.root.area
     }
 }
 
