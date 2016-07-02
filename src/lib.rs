@@ -12,9 +12,9 @@ pub struct QuadTree<T> {
 }
 
 impl<T> QuadTree<T> {
-    pub fn new(left: f32, right: f32, top: f32, bot: f32) -> QuadTree<T> {
+    pub fn new(left: f32, bot: f32, right: f32, top: f32) -> QuadTree<T> {
         QuadTree {
-            root: QuadTreeNode::new(left, right, top, bot),
+            root: QuadTreeNode::new(left, bot, right, top),
         }
     }
 
@@ -31,9 +31,9 @@ impl<T> QuadTree<T> {
 #[derive(Clone,Debug)]
 struct QuadTreeNode<T> {
     left: f32,
+    bot: f32,
     right: f32,
     top: f32,
-    bot: f32,
     kind: QuadTreeNodeKind<T>,
 }
 
@@ -53,16 +53,16 @@ struct Subtrees<T> {
 }
 
 impl<T> Subtrees<T> {
-    fn new(left: f32, right: f32, top: f32, bot: f32) -> Subtrees<T> {
+    fn new(left: f32, bot: f32, right: f32, top: f32) -> Subtrees<T> {
         debug_assert!(left < right);
         debug_assert!(bot < top);
         let mid_x = (right + left) / 2.0;
         let mid_y = (top   + bot ) / 2.0;
         Subtrees {
-            top_left: QuadTreeNode::new(left, mid_x, top, mid_y),
-            top_right: QuadTreeNode::new(mid_x, right, top, mid_y),
-            bot_left: QuadTreeNode::new(left, mid_x, mid_y, bot),
-            bot_right: QuadTreeNode::new(mid_x, right, mid_y, bot),
+            top_left: QuadTreeNode::new(left, mid_y, mid_x, top),
+            top_right: QuadTreeNode::new(mid_x, mid_y, right, top),
+            bot_left: QuadTreeNode::new(left, bot, mid_x, mid_y),
+            bot_right: QuadTreeNode::new(mid_x, bot, right, mid_y),
         }
     }
 
@@ -87,7 +87,7 @@ impl<T> Subtrees<T> {
 }
 
 impl<T> QuadTreeNode<T> {
-    fn new(left: f32, right: f32, top: f32, bot: f32) -> QuadTreeNode<T> {
+    fn new(left: f32, bot: f32, right: f32, top: f32) -> QuadTreeNode<T> {
         QuadTreeNode {
             left: left,
             right: right,
@@ -107,7 +107,7 @@ impl<T> QuadTreeNode<T> {
                 self.kind = QuadTreeNodeKind::Leaf((pos, data));
             }
             QuadTreeNodeKind::Leaf(_) => {
-                let mut subtree = Box::new(Subtrees::new(self.left, self.right, self.top, self.bot));
+                let mut subtree = Box::new(Subtrees::new(self.left, self.bot, self.right, self.top));
                 subtree.add(pos, data);
                 let (other_pos, other_data) = match mem::replace(&mut self.kind, QuadTreeNodeKind::Empty) {
                     QuadTreeNodeKind::Leaf(o) => o,

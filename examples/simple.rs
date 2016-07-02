@@ -10,13 +10,13 @@ fn main() {
         (-1.0, 1.0),
         (-1.0, -1.0),
     ];
-    let mut tree = QuadTree::new(-10.0, 10.0, 10.0, -10.0);
+    let mut tree = QuadTree::new(-10.0, -10.0, 10.0, 10.0);
     for (id, (x,y)) in positions.into_iter().enumerate() {
         tree.add(Position { x: x, y: y }, id);
     }
     let left = -2.0;
-    let right = 0.0;
     let bot = -2.0;
+    let right = 0.0;
     let top = 0.0;
     tree.visit(&mut |l, b, r, t, node| {
         match node {
