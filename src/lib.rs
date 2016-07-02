@@ -64,7 +64,7 @@ impl<T> QuadTree<T> {
     }
 
     pub fn visit<F>(&mut self, f: &mut F)
-    where F: FnMut(Rectangle, Option<(Position, &mut T)>) -> bool {
+    where F: FnMut(&Rectangle, Option<(Position, &mut T)>) -> bool {
         self.root.visit(f);
     }
 }
@@ -116,7 +116,7 @@ impl<T> Subtrees<T> {
     }
 
     fn visit<F>(&mut self, f: &mut F)
-    where F: FnMut(Rectangle, Option<(Position, &mut T)>) -> bool {
+    where F: FnMut(&Rectangle, Option<(Position, &mut T)>) -> bool {
         self.top_left.visit(f);
         self.top_right.visit(f);
         self.bot_left.visit(f);
@@ -158,14 +158,14 @@ impl<T> QuadTreeNode<T> {
     }
 
     fn visit<F>(&mut self, f: &mut F)
-    where F: FnMut(Rectangle, Option<(Position, &mut T)>) -> bool {
+    where F: FnMut(&Rectangle, Option<(Position, &mut T)>) -> bool {
         match self.kind {
             QuadTreeNodeKind::Empty => {}
             QuadTreeNodeKind::Leaf((pos, ref mut data)) => {
-                f(self.area, Some((pos, data)));
+                f(&self.area, Some((pos, data)));
             }
             QuadTreeNodeKind::Interior(ref mut subtrees) => {
-                if f(self.area, None) {
+                if f(&self.area, None) {
                     subtrees.visit(f);
                 }
             }

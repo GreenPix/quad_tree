@@ -26,7 +26,7 @@ fn main() {
                 true    // ignored
             }
             None => {
-                rectangle.intersects(&area)
+                rectangle.intersects(area)
             }
         }
     });
