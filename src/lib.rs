@@ -6,15 +6,56 @@ use nalgebra::Point2;
 
 pub type Position = Point2<f32>;
 
+#[derive(Clone,Debug,Copy)]
+pub struct Rectangle {
+    pub left: f32,
+    pub bot: f32,
+    pub right: f32,
+    pub top: f32,
+}
+
+impl Rectangle {
+    pub fn new(left: f32, bot: f32, right: f32, top: f32) -> Rectangle {
+        Rectangle {
+            left: left,
+            bot: bot,
+            right: right,
+            top: top,
+        }
+    }
+
+    pub fn intersects(&self, other: &Rectangle) -> bool {
+        if self.bot > other.top { return false; }
+        if self.top < other.bot { return false; }
+
+        if self.right < other.left  { return false; }
+        if self.left  > other.right { return false; }
+
+        true
+    }
+
+    pub fn intersects_loosened(&self, other: &Rectangle, amount: f32) -> bool {
+        let other_loosened = Rectangle::new(other.left - amount,
+                                            other.bot - amount,
+                                            other.right + amount,
+                                            other.top + amount);
+        self.intersects(&other_loosened)
+    }
+
+    pub fn is_inside(&self, pos: Position) -> bool {
+        pos.x >= self.left && pos.x <= self.right && pos.y >= self.bot && pos.y <= self.top
+    }
+}
+
 #[derive(Clone,Debug)]
 pub struct QuadTree<T> {
     root: QuadTreeNode<T>,
 }
 
 impl<T> QuadTree<T> {
-    pub fn new(left: f32, bot: f32, right: f32, top: f32) -> QuadTree<T> {
+    pub fn new(area: Rectangle) -> QuadTree<T> {
         QuadTree {
-            root: QuadTreeNode::new(left, bot, right, top),
+            root: QuadTreeNode::new(area),
         }
     }
 
@@ -23,17 +64,14 @@ impl<T> QuadTree<T> {
     }
 
     pub fn visit<F>(&mut self, f: &mut F)
-    where F: FnMut(f32, f32, f32, f32, Option<(Position, &mut T)>) -> bool {
+    where F: FnMut(Rectangle, Option<(Position, &mut T)>) -> bool {
         self.root.visit(f);
     }
 }
 
 #[derive(Clone,Debug)]
 struct QuadTreeNode<T> {
-    left: f32,
-    bot: f32,
-    right: f32,
-    top: f32,
+    area: Rectangle,
     kind: QuadTreeNodeKind<T>,
 }
 
@@ -53,22 +91,22 @@ struct Subtrees<T> {
 }
 
 impl<T> Subtrees<T> {
-    fn new(left: f32, bot: f32, right: f32, top: f32) -> Subtrees<T> {
-        debug_assert!(left < right);
-        debug_assert!(bot < top);
-        let mid_x = (right + left) / 2.0;
-        let mid_y = (top   + bot ) / 2.0;
+    fn new(area: Rectangle) -> Subtrees<T> {
+        debug_assert!(area.left < area.right);
+        debug_assert!(area.bot < area.top);
+        let mid_x = (area.right + area.left) / 2.0;
+        let mid_y = (area.top   + area.bot ) / 2.0;
         Subtrees {
-            top_left: QuadTreeNode::new(left, mid_y, mid_x, top),
-            top_right: QuadTreeNode::new(mid_x, mid_y, right, top),
-            bot_left: QuadTreeNode::new(left, bot, mid_x, mid_y),
-            bot_right: QuadTreeNode::new(mid_x, bot, right, mid_y),
+            top_left: QuadTreeNode::new(Rectangle::new(area.left, mid_y, mid_x, area.top)),
+            top_right: QuadTreeNode::new(Rectangle::new(mid_x, mid_y, area.right, area.top)),
+            bot_left: QuadTreeNode::new(Rectangle::new(area.left, area.bot, mid_x, mid_y)),
+            bot_right: QuadTreeNode::new(Rectangle::new(mid_x, area.bot, area.right, mid_y)),
         }
     }
 
     fn add(&mut self, pos: Position, data: T) {
-        let left = pos.x < (self.top_right.right + self.bot_left.left) / 2.0;
-        let bot  = pos.y < (self.top_right.top   + self.bot_left.bot)  / 2.0;
+        let left = pos.x < (self.top_right.area.right + self.bot_left.area.left) / 2.0;
+        let bot  = pos.y < (self.top_right.area.top   + self.bot_left.area.bot)  / 2.0;
         match (bot, left) {
             (true , true ) => self.bot_left.add(pos, data),
             (true , false) => self.bot_right.add(pos, data),
@@ -78,7 +116,7 @@ impl<T> Subtrees<T> {
     }
 
     fn visit<F>(&mut self, f: &mut F)
-    where F: FnMut(f32, f32, f32, f32, Option<(Position, &mut T)>) -> bool {
+    where F: FnMut(Rectangle, Option<(Position, &mut T)>) -> bool {
         self.top_left.visit(f);
         self.top_right.visit(f);
         self.bot_left.visit(f);
@@ -87,19 +125,16 @@ impl<T> Subtrees<T> {
 }
 
 impl<T> QuadTreeNode<T> {
-    fn new(left: f32, bot: f32, right: f32, top: f32) -> QuadTreeNode<T> {
+    fn new(area: Rectangle) -> QuadTreeNode<T> {
         QuadTreeNode {
-            left: left,
-            right: right,
-            top: top,
-            bot: bot,
+            area: area,
             kind: QuadTreeNodeKind::Empty,
         }
     }
 
     fn add(&mut self, pos: Position, data: T) {
-        if pos.x < self.left || pos.x > self.right ||
-           pos.y < self.bot  || pos.y > self.top {
+        if pos.x < self.area.left || pos.x > self.area.right ||
+           pos.y < self.area.bot  || pos.y > self.area.top {
             panic!("Trying to add point to wrong subtree");
         }
         match self.kind {
@@ -107,7 +142,7 @@ impl<T> QuadTreeNode<T> {
                 self.kind = QuadTreeNodeKind::Leaf((pos, data));
             }
             QuadTreeNodeKind::Leaf(_) => {
-                let mut subtree = Box::new(Subtrees::new(self.left, self.bot, self.right, self.top));
+                let mut subtree = Box::new(Subtrees::new(self.area));
                 subtree.add(pos, data);
                 let (other_pos, other_data) = match mem::replace(&mut self.kind, QuadTreeNodeKind::Empty) {
                     QuadTreeNodeKind::Leaf(o) => o,
@@ -123,14 +158,14 @@ impl<T> QuadTreeNode<T> {
     }
 
     fn visit<F>(&mut self, f: &mut F)
-    where F: FnMut(f32, f32, f32, f32, Option<(Position, &mut T)>) -> bool {
+    where F: FnMut(Rectangle, Option<(Position, &mut T)>) -> bool {
         match self.kind {
             QuadTreeNodeKind::Empty => {}
             QuadTreeNodeKind::Leaf((pos, ref mut data)) => {
-                f(self.left, self.bot, self.right, self.top, Some((pos, data)));
+                f(self.area, Some((pos, data)));
             }
             QuadTreeNodeKind::Interior(ref mut subtrees) => {
-                if f(self.left, self.bot, self.right, self.top, None) {
+                if f(self.area, None) {
                     subtrees.visit(f);
                 }
             }
